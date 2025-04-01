@@ -62,7 +62,7 @@ $result = $conn->query($sql);
                     <tr>
                         <td colspan="6" class="text-center py-4">
                             <div class="alert alert-warning">
-                                <i class="bi bi-exclamation-triangle"></i> Trenutno nema proizvoda
+                                <i class="bi bi-exclamation-triangle"></i> Trenutno nema poroizvoda
                             </div>
                         </td>
                     </tr>
