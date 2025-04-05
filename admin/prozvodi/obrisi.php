@@ -1,58 +1,37 @@
 <?php
-require_once $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/auth_check.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/db_connection.php';
+session_start();
+require_once __DIR__ . '/../includes/db_connection.php';
+require_once __DIR__ . '/../includes/auth_check.php';
 
-header('Content-Type: application/json');
+if (!isset($_SESSION['admin_logged_in'])) {
+    header("Location: /trgovina/admin/login.php");
+    exit();
+}
 
-try {
-    if (!isset($_GET['id'])) {
-        throw new Exception('Nije pronađen ID proizvoda');
-    }
+$id = (int)($_GET['id'] ?? 0);
+if ($id === 0) {
+    header("Location: /trgovina/admin/index.php?error=Nevažeći+ID");
+    exit();
+}
 
-    $id = (int)$_GET['id'];
-    $stmt = $conn->prepare("DELETE FROM proizvod WHERE IDProizvod = ?"); 
-    $stmt->bind_param("i", $id);
+// Provjeri postoji li proizvod prije brisanja
+$stmt = $conn->prepare("SELECT IDProizvod FROM proizvod WHERE IDProizvod = ?");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$result = $stmt->get_result();
 
-    if ($stmt->execute()) {
-        echo json_encode(['success' => true]);
-    } else {
-        throw new Exception($stmt->error);
-    }
-} catch (Exception $e) {
-    http_response_code(400);
-    echo json_encode(['error' => $e->getMessage()]);
+if ($result->num_rows === 0) {
+    header("Location: /trgovina/admin/index.php?error=Proizvod+nije+pronađen");
+    exit();
+}
+
+// Obriši proizvod
+$delete_stmt = $conn->prepare("DELETE FROM proizvod WHERE IDProizvod = ?");
+$delete_stmt->bind_param("i", $id);
+
+if ($delete_stmt->execute()) {
+    header("Location: /trgovina/admin/index.php?success=Proizvod+je+uspješno+obrisan");
+} else {
+    header("Location: /trgovina/admin/index.php?error=Greška+pri+brisanju+proizvoda");
 }
 exit();
-?>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Potvrdi brisanje
-    document.querySelectorAll('a[onclick]').forEach(link => {
-        link.addEventListener('click', function(e) {
-            if (!confirm('Jeste li sigurni da želite obrisati ovaj proizvod?')) {
-                e.preventDefault();
-                return;
-            }
-            
-            // AJAX brisanje
-            e.preventDefault();
-            const id = this.getAttribute('href').split('id=')[1];
-            
-            fetch('obrisi.php?id=' + id, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.href = '../index.php?success=1';
-                } else {
-                    alert(data.error || 'Došlo je do greške prilikom brisanja');
-                }
-            });
-        });
-    });
-});
-</script>

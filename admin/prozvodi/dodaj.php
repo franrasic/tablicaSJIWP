@@ -1,16 +1,35 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+session_start();
+require_once __DIR__ . '/../includes/db_connection.php';
+require_once __DIR__ . '/../includes/auth_check.php';
 
-require_once $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/auth_check.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/db_connection.php';
-check_admin_session();
-
-if (isset($_GET['error'])) {
-    $error = htmlspecialchars($_GET['error']);
+if (!isset($_SESSION['admin_logged_in'])) {
+    header("Location: /trgovina/admin/login.php");
+    exit();
 }
 
-include __DIR__ . '/../../includes/header.php';
+// Obrada forme za dodavanje
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $naziv = $conn->real_escape_string($_POST['naziv']);
+    $cijena = (float)$_POST['cijena'];
+    $kolicina = (int)$_POST['kolicina'];
+    $dobavljac_id = (int)$_POST['dobavljac_id'];
+    
+    $insert_stmt = $conn->prepare("INSERT INTO proizvod (Naziv, Cijena, Kolicina, DobavljacID) VALUES (?, ?, ?, ?)");
+    $insert_stmt->bind_param("sdii", $naziv, $cijena, $kolicina, $dobavljac_id);
+    
+    if ($insert_stmt->execute()) {
+        header("Location: /trgovina/admin/index.php?success=Proizvod+je+uspješno+dodan");
+        exit();
+    } else {
+        $error = "Greška pri dodavanju proizvoda: " . $conn->error;
+    }
+}
+
+// Dohvat dobavljača za dropdown
+$dobavljaci = $conn->query("SELECT IDDobavljac, Ime FROM dobavljac");
+
+include __DIR__ . '/../includes/header.php';
 ?>
 
 <div class="container mt-5">
@@ -20,82 +39,35 @@ include __DIR__ . '/../../includes/header.php';
         <div class="alert alert-danger"><?= $error ?></div>
     <?php endif; ?>
     
-    <form action="/trgovina/admin/proizvodi/process_add.php" method="post">
+    <form method="post">
         <div class="mb-3">
             <label for="naziv" class="form-label">Naziv proizvoda</label>
             <input type="text" class="form-control" id="naziv" name="naziv" required>
-            <div class="invalid-feedback">Unesite naziv proizvoda</div>
         </div>
         
         <div class="mb-3">
             <label for="cijena" class="form-label">Cijena (HRK)</label>
             <input type="number" step="0.01" class="form-control" id="cijena" name="cijena" required>
-            <div class="invalid-feedback">Unesite ispravnu cijenu</div>
         </div>
         
-        <button type="submit" class="btn btn-primary">Spremi proizvod</button>
-        <a href="../index.php" class="btn btn-secondary">Natrag</a>
+        <div class="mb-3">
+            <label for="kolicina" class="form-label">Količina</label>
+            <input type="number" class="form-control" id="kolicina" name="kolicina" required>
+        </div>
+        
+        <div class="mb-3">
+            <label for="dobavljac_id" class="form-label">Dobavljač</label>
+            <select class="form-select" id="dobavljac_id" name="dobavljac_id" required>
+                <option value="">Odaberite dobavljača</option>
+                <?php while($dobavljac = $dobavljaci->fetch_assoc()): ?>
+                    <option value="<?= $dobavljac['IDDobavljac'] ?>"><?= htmlspecialchars($dobavljac['Ime']) ?></option>
+                <?php endwhile; ?>
+            </select>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Dodaj proizvod</button>
+        <a href="/trgovina/admin/index.php" class="btn btn-secondary">Odustani</a>
     </form>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form');
-    const feedback = document.createElement('div');
-    
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        if (!this.checkValidity()) {
-            e.stopPropagation();
-            this.classList.add('was-validated');
-            return;
-        }
-
-        const submitBtn = this.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Spremanje...';
-        submitBtn.disabled = true;
-
-        try {
-            const formData = new FormData(this);
-            const response = await fetch('process_add.php', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                window.location.href = '../index.php?success=1';
-            } else {
-                feedback.className = 'alert alert-danger mt-3';
-                feedback.innerHTML = data.error || 'Došlo je do greške prilikom dodavanja';
-                form.after(feedback);
-            }
-        } catch (error) {
-            feedback.className = 'alert alert-danger mt-3';
-            feedback.innerHTML = 'Network error: ' + error.message;
-            form.after(feedback);
-        } finally {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-        }
-    });
-
-    // Live validacija
-    form.querySelectorAll('input').forEach(input => {
-        input.addEventListener('input', function() {
-            if (this.checkValidity()) {
-                this.classList.remove('is-invalid');
-                this.classList.add('is-valid');
-            } else {
-                this.classList.remove('is-valid');
-                this.classList.add('is-invalid');
-            }
-        });
-    });
-});
-</script>
-
-<?php include __DIR__ . '/../../includes/footer.php'; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

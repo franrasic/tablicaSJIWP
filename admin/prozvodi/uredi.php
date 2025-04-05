@@ -1,10 +1,12 @@
 <?php
-// Debug ispis
-error_log("Pristup uredi.php sa ID: " . ($_GET['id'] ?? 'N/A'));
+session_start();
+require_once __DIR__ . '/../includes/db_connection.php';
+require_once __DIR__ . '/../includes/auth_check.php';
 
-require_once $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/auth_check.php';
-require_once $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/db_connection.php';
-check_admin_session();
+if (!isset($_SESSION['admin_logged_in'])) {
+    header("Location: /trgovina/admin/login.php");
+    exit();
+}
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id === 0) {
@@ -23,21 +25,33 @@ if (!$proizvod) {
     exit();
 }
 
-include $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/header.php';
+// Obrada forme za ažuriranje
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $naziv = $conn->real_escape_string($_POST['naziv']);
+    $cijena = (float)$_POST['cijena'];
+    
+    $update_stmt = $conn->prepare("UPDATE proizvod SET Naziv = ?, Cijena = ? WHERE IDProizvod = ?");
+    $update_stmt->bind_param("sdi", $naziv, $cijena, $id);
+    
+    if ($update_stmt->execute()) {
+        header("Location: /trgovina/admin/index.php?success=Proizvod+je+uspješno+ažuriran");
+        exit();
+    } else {
+        $error = "Greška pri ažuriranju proizvoda: " . $conn->error;
+    }
+}
+
+include __DIR__ . '/../includes/header.php';
 ?>
-<!-- Modal -->
-<div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="exampleModalLabel">Modal title</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-      <div class="container mt-5">
+
+<div class="container mt-5">
     <h2><i class="bi bi-pencil-square"></i> Uređivanje proizvoda</h2>
     
-    <form action="/trgovina/admin/proizvodi/process_update.php" method="post">
+    <?php if (isset($error)): ?>
+        <div class="alert alert-danger"><?= $error ?></div>
+    <?php endif; ?>
+    
+    <form method="post">
         <input type="hidden" name="id" value="<?= $proizvod['IDProizvod'] ?>">
         
         <div class="mb-3">
@@ -56,15 +70,5 @@ include $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/header.php';
         <a href="/trgovina/admin/index.php" class="btn btn-secondary">Odustani</a>
     </form>
 </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary">Save changes</button>
-      </div>
-    </div>
-  </div>
-</div>
 
-
-
-<?php include $_SERVER['DOCUMENT_ROOT'] . '/trgovina/includes/footer.php'; ?> 
+<?php include __DIR__ . '/../includes/footer.php'; ?>
